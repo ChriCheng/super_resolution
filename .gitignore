@@ -1,4 +1,7 @@
 DIV2K_train_HR.zip
 DIV2K_valid_HR.zip
 data/*
-
+outputs/*
+logs/*
+__pycache__/*
+src/__pycache__/*

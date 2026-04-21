@@ -1,6 +1,8 @@
 import argparse
 import json
 import os
+import sys
+import time
 from pathlib import Path
 
 import mindspore as ms
@@ -9,6 +11,43 @@ import mindspore.nn as nn
 from src.dataset import create_train_loader
 from src.model import ESPCN
 from src.utils import AverageMeter, ensure_dir, set_random_seed
+
+
+class ProgressBar:
+    """Minimal terminal progress bar without external dependencies."""
+
+    def __init__(self, total: int, desc: str = "", width: int = 30):
+        self.total = max(int(total), 1)
+        self.desc = desc
+        self.width = width
+        self.current = 0
+        self.start_time = time.time()
+        self._render()
+
+    def update(self, n: int = 1, postfix: str = ""):
+        self.current = min(self.current + n, self.total)
+        self._render(postfix=postfix)
+
+    def close(self, postfix: str = ""):
+        self.current = self.total
+        self._render(postfix=postfix)
+        sys.stdout.write("\n")
+        sys.stdout.flush()
+
+    def _render(self, postfix: str = ""):
+        ratio = self.current / self.total
+        filled = int(self.width * ratio)
+        bar = "=" * filled + "." * (self.width - filled)
+        elapsed = time.time() - self.start_time
+        rate = self.current / elapsed if elapsed > 0 else 0.0
+        line = (
+            f"\r{self.desc} [{bar}] {self.current}/{self.total} "
+            f"({ratio * 100:6.2f}%) {rate:5.2f} it/s"
+        )
+        if postfix:
+            line += f"  {postfix}"
+        sys.stdout.write(line)
+        sys.stdout.flush()
 
 
 def parse_args():
@@ -45,6 +84,7 @@ def main():
         patch_size=args.patch_size,
         repeat=args.repeat,
     )
+    steps_per_epoch = train_loader.get_dataset_size()
 
     model = ESPCN(scale=4)
     criterion = nn.MSELoss()
@@ -65,14 +105,18 @@ def main():
     for epoch in range(1, args.epochs + 1):
         model.set_train(True)
         loss_meter = AverageMeter()
+        progress = ProgressBar(total=steps_per_epoch, desc=f"Epoch {epoch}/{args.epochs}")
 
         for batch in train_loader.create_tuple_iterator(num_epochs=1):
             lr, hr = batch
             (loss, _), grads = grad_fn(lr, hr)
             optimizer(grads)
-            loss_meter.update(float(loss.asnumpy()))
+            loss_value = float(loss.asnumpy())
+            loss_meter.update(loss_value)
+            progress.update(postfix=f"loss={loss_value:.6f} avg={loss_meter.avg:.6f}")
 
         avg_loss = loss_meter.avg
+        progress.close(postfix=f"loss={avg_loss:.6f}")
         print(f"Epoch [{epoch}/{args.epochs}]  loss={avg_loss:.6f}")
         with open(log_path, "a", encoding="utf-8") as f:
             f.write(f"{epoch},{avg_loss:.8f}\n")
