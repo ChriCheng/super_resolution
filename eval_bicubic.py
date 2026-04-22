@@ -7,12 +7,26 @@ from PIL import Image
 import mindspore as ms
 
 from src.dataset import create_eval_loader
-from src.utils import calc_psnr_ssim, ensure_dir, save_image, tensor_to_image_uint8, write_csv
+from src.utils import (
+    calc_psnr_ssim,
+    ensure_dir,
+    extract_img_name,
+    save_image,
+    tensor_to_image_uint8,
+    write_csv,
+)
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Evaluate Bicubic x4 baseline")
-    parser.add_argument("--set5_hr_dir", type=str, required=True, help="Path to HR images")
+    parser.add_argument(
+        "--eval_hr_dir",
+        "--set5_hr_dir",
+        dest="eval_hr_dir",
+        type=str,
+        required=True,
+        help="Path to HR images for evaluation",
+    )
     parser.add_argument("--save_dir", type=str, default="./outputs/eval_bicubic_x4")
     parser.add_argument("--scale", type=int, default=4)
     parser.add_argument("--device_target", type=str, default="CPU", choices=["CPU", "GPU", "Ascend"])
@@ -21,25 +35,6 @@ def parse_args():
     parser.add_argument("--test_y_channel", action="store_true", default=True)
     parser.add_argument("--no_test_y_channel", action="store_false", dest="test_y_channel")
     return parser.parse_args()
-
-
-def extract_img_name(name):
-    if hasattr(name, "asnumpy"):
-        name = name.asnumpy()
-
-    if isinstance(name, np.ndarray):
-        if name.size == 1:
-            name = name.reshape(-1)[0]
-        else:
-            name = name.tolist()[0]
-
-    if isinstance(name, (list, tuple)):
-        name = name[0]
-
-    if isinstance(name, bytes):
-        name = name.decode("utf-8")
-
-    return os.path.basename(str(name).strip())
 
 
 def bicubic_upsample_from_lr_tensor(lr, out_h, out_w):
@@ -57,7 +52,7 @@ def main():
     ensure_dir(args.save_dir)
     ensure_dir(os.path.join(args.save_dir, "sr_images"))
 
-    loader = create_eval_loader(args.set5_hr_dir, scale=args.scale)
+    loader = create_eval_loader(args.eval_hr_dir, scale=args.scale)
     rows = []
 
     for batch in loader.create_tuple_iterator(num_epochs=1):
@@ -96,6 +91,7 @@ def main():
             "average_ssim": avg_ssim,
             "scale": args.scale,
             "test_y_channel": args.test_y_channel,
+            "eval_hr_dir": args.eval_hr_dir,
         }, f, indent=2, ensure_ascii=False)
 
     print("=" * 60)

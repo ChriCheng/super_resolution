@@ -7,14 +7,28 @@ import mindspore as ms
 
 from src.dataset import create_eval_loader
 from src.model import ESPCN
-from src.utils import calc_psnr_ssim, ensure_dir, save_image, tensor_to_image_uint8, write_csv
+from src.utils import (
+    calc_psnr_ssim,
+    ensure_dir,
+    extract_img_name,
+    save_image,
+    tensor_to_image_uint8,
+    write_csv,
+)
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Evaluate ESPCN x4 with MindSpore")
-    parser.add_argument("--set5_hr_dir", type=str, required=True, help="Path to HR images")
+    parser.add_argument(
+        "--eval_hr_dir",
+        "--set5_hr_dir",
+        dest="eval_hr_dir",
+        type=str,
+        required=True,
+        help="Path to HR images for evaluation",
+    )
     parser.add_argument("--ckpt_path", type=str, required=True, help="Path to best.ckpt")
-    parser.add_argument("--save_dir", type=str, default="./outputs/eval_set5_x4")
+    parser.add_argument("--save_dir", type=str, default="./outputs/eval_x4")
     parser.add_argument("--scale", type=int, default=4)
     parser.add_argument("--device_target", type=str, default="GPU", choices=["CPU", "GPU", "Ascend"])
     parser.add_argument("--device_id", type=int, default=None)
@@ -22,27 +36,6 @@ def parse_args():
     parser.add_argument("--test_y_channel", action="store_true", default=True)
     parser.add_argument("--no_test_y_channel", action="store_false", dest="test_y_channel")
     return parser.parse_args()
-
-
-def extract_img_name(name):
-    if hasattr(name, "asnumpy"):
-        name = name.asnumpy()
-
-    if isinstance(name, np.ndarray):
-        if name.size == 1:
-            name = name.reshape(-1)[0]
-        else:
-            name = name.tolist()[0]
-
-    if isinstance(name, (list, tuple)):
-        name = name[0]
-
-    if isinstance(name, bytes):
-        name = name.decode("utf-8")
-
-    name = str(name).strip()
-    name = os.path.basename(name)
-    return name
 
 
 def main():
@@ -58,7 +51,7 @@ def main():
     ms.load_param_into_net(model, param_dict)
     model.set_train(False)
 
-    loader = create_eval_loader(args.set5_hr_dir, scale=args.scale)
+    loader = create_eval_loader(args.eval_hr_dir, scale=args.scale)
     rows = []
 
     for batch in loader.create_tuple_iterator(num_epochs=1):
@@ -89,7 +82,7 @@ def main():
     avg_psnr = float(np.mean([r["psnr"] for r in rows]))
     avg_ssim = float(np.mean([r["ssim"] for r in rows]))
     rows.append({"image": "Average", "psnr": round(avg_psnr, 4), "ssim": round(avg_ssim, 6)})
-    write_csv(rows, os.path.join(args.save_dir, "set5_x4_metrics.csv"))
+    write_csv(rows, os.path.join(args.save_dir, "metrics_x4.csv"))
 
     with open(os.path.join(args.save_dir, "summary.json"), "w", encoding="utf-8") as f:
         json.dump({
@@ -97,6 +90,7 @@ def main():
             "average_ssim": avg_ssim,
             "scale": args.scale,
             "test_y_channel": args.test_y_channel,
+            "eval_hr_dir": args.eval_hr_dir,
         }, f, indent=2, ensure_ascii=False)
 
     print("=" * 60)
