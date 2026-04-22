@@ -8,7 +8,7 @@ export CUDA_VISIBLE_DEVICES=0
 
 cd /root/code/super_resolution || exit 1
 
-python eval_bicubic.py \
-  --eval_hr_dir ./data/DIV2K_valid_HR \
-  --save_dir ./outputs/eval_bicubic_div2k_valid_x4 \
+exec python eval_bicubic.py \
+  --eval_hr_dir ./data/Set5 \
+  --save_dir ./outputs/eval_bicubic_set5_x4 \
   --device_target GPU
