@@ -7,7 +7,7 @@ import time
 import mindspore as ms
 import mindspore.nn as nn
 
-from src.dataset_old import create_eval_loader, create_train_loader
+from src.dataset import create_eval_loader, create_train_loader
 from src.model import ESPCN
 from src.utils import (
     AverageMeter,
@@ -54,15 +54,15 @@ class ProgressBar:
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Train ESPCN x4 on DIV2K with MindSpore")
+    parser = argparse.ArgumentParser(description="Train SwinIR-style x4 on DIV2K with MindSpore")
     parser.add_argument("--div2k_hr_dir", type=str, required=True, help="Path to DIV2K_train_HR")
     parser.add_argument("--div2k_val_hr_dir", type=str, default=None, help="Path to DIV2K_valid_HR")
-    parser.add_argument("--save_dir", type=str, default="./outputs/train_espcn_x4")
-    parser.add_argument("--epochs", type=int, default=120)
-    parser.add_argument("--batch_size", type=int, default=16)
+    parser.add_argument("--save_dir", type=str, default="./outputs/train_swinir_x4")
+    parser.add_argument("--epochs", type=int, default=200)
+    parser.add_argument("--batch_size", type=int, default=8)
     parser.add_argument("--patch_size", type=int, default=192)
     parser.add_argument("--repeat", type=int, default=20, help="Random patches per image per epoch")
-    parser.add_argument("--lr", type=float, default=1e-3)
+    parser.add_argument("--lr", type=float, default=2e-4)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--save_every", type=int, default=10)
     parser.add_argument("--device_target", type=str, default="GPU", choices=["CPU", "GPU", "Ascend"])

@@ -5,7 +5,7 @@ import os
 import numpy as np
 import mindspore as ms
 
-from src.dataset import create_eval_loader
+from src.dataset_old import create_eval_loader
 from src.model import ESPCN
 from src.utils import (
     calc_psnr_ssim,

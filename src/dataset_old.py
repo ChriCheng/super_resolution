@@ -23,33 +23,20 @@ def list_images(folder: str) -> List[Path]:
 
 
 class DIV2KPatchDataset:
-    """
-    Random patch dataset.
+    """Random patch dataset.
+
     Read DIV2K HR images and generate LR-HR pairs on the fly using bicubic downsampling.
     """
 
-    def __init__(
-        self,
-        hr_dir: str,
-        scale: int = 4,
-        patch_size: int = 192,
-        repeat: int = 20,
-        augment: bool = True,
-        window_size: int = 8,
-    ):
+    def __init__(self, hr_dir: str, scale: int = 4, patch_size: int = 192, repeat: int = 20, augment: bool = True):
         self.files = list_images(hr_dir)
         self.scale = scale
         self.patch_size = patch_size
         self.repeat = repeat
         self.augment = augment
-        self.window_size = window_size
 
-        required_multiple = scale * window_size
-        if patch_size % required_multiple != 0:
-            raise ValueError(
-                f"patch_size must be divisible by scale*window_size={required_multiple}, "
-                f"but got patch_size={patch_size}"
-            )
+        if patch_size % scale != 0:
+            raise ValueError("patch_size must be divisible by scale")
 
     def __len__(self):
         return len(self.files) * self.repeat
@@ -57,7 +44,6 @@ class DIV2KPatchDataset:
     def _random_crop(self, img: Image.Image) -> Image.Image:
         w, h = img.size
         ps = self.patch_size
-
         if w < ps or h < ps:
             scale_factor = max(ps / w, ps / h)
             new_w = int(round(w * scale_factor))
@@ -90,7 +76,6 @@ class DIV2KPatchDataset:
         img_path = self.files[index % len(self.files)]
         hr = Image.open(img_path).convert("RGB")
         hr = self._random_crop(hr)
-
         if self.augment:
             hr = self._augment(hr)
 
@@ -103,21 +88,15 @@ class DIV2KPatchDataset:
 
 
 class Set5EvalDataset:
-    """
-    Full-image evaluation dataset.
+    """Full-image evaluation dataset.
 
     The dataset expects high-resolution ground-truth images only.
     LR images are produced internally using bicubic x4 downsampling.
-
-    For SwinIR-style window attention:
-    - HR size should be divisible by scale * window_size
-    - LR size should be divisible by window_size
     """
 
-    def __init__(self, hr_dir: str, scale: int = 4, window_size: int = 8):
+    def __init__(self, hr_dir: str, scale: int = 4):
         self.files = list_images(hr_dir)
         self.scale = scale
-        self.window_size = window_size
 
     def __len__(self):
         return len(self.files)
@@ -131,59 +110,30 @@ class Set5EvalDataset:
     def __getitem__(self, index: int):
         img_path = self.files[index]
         hr = Image.open(img_path).convert("RGB")
-
-        required_multiple = self.scale * self.window_size
         w, h = hr.size
-        w = (w // required_multiple) * required_multiple
-        h = (h // required_multiple) * required_multiple
-
-        if w <= 0 or h <= 0:
-            raise ValueError(
-                f"Image {img_path.name} is too small after cropping for "
-                f"scale={self.scale}, window_size={self.window_size}"
-            )
-
+        w = (w // self.scale) * self.scale
+        h = (h // self.scale) * self.scale
         hr = hr.crop((0, 0, w, h))
         lr = hr.resize((w // self.scale, h // self.scale), Image.BICUBIC)
-
         return self._to_chw_float(lr), self._to_chw_float(hr), img_path.name
 
 
-def create_train_loader(
-    hr_dir: str,
-    batch_size: int = 8,
-    scale: int = 4,
-    patch_size: int = 192,
-    repeat: int = 20,
-    num_parallel_workers: int = 1,
-):
-    dataset = DIV2KPatchDataset(
-        hr_dir=hr_dir,
-        scale=scale,
-        patch_size=patch_size,
-        repeat=repeat,
-        augment=True,
-        window_size=8,
-    )
-    loader = ds.GeneratorDataset(
-        dataset,
-        column_names=["lr", "hr"],
-        shuffle=True,
-        num_parallel_workers=num_parallel_workers,
-        python_multiprocessing=False,
-    )
+def create_train_loader(hr_dir: str,
+                        batch_size: int = 16,
+                        scale: int = 4,
+                        patch_size: int = 192,
+                        repeat: int = 20,
+                        num_parallel_workers: int = 1):
+    dataset = DIV2KPatchDataset(hr_dir=hr_dir, scale=scale, patch_size=patch_size, repeat=repeat, augment=True)
+    loader = ds.GeneratorDataset(dataset, column_names=["lr", "hr"], shuffle=True,
+                                 num_parallel_workers=num_parallel_workers, python_multiprocessing=False)
     loader = loader.batch(batch_size, drop_remainder=True)
     return loader
 
 
 def create_eval_loader(hr_dir: str, scale: int = 4):
-    dataset = Set5EvalDataset(hr_dir=hr_dir, scale=scale, window_size=8)
-    loader = ds.GeneratorDataset(
-        dataset,
-        column_names=["lr", "hr", "name"],
-        shuffle=False,
-        num_parallel_workers=1,
-        python_multiprocessing=False,
-    )
+    dataset = Set5EvalDataset(hr_dir=hr_dir, scale=scale)
+    loader = ds.GeneratorDataset(dataset, column_names=["lr", "hr", "name"], shuffle=False,
+                                 num_parallel_workers=1, python_multiprocessing=False)
     loader = loader.batch(1)
     return loader

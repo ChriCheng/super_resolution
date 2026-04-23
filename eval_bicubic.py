@@ -6,7 +6,7 @@ import numpy as np
 from PIL import Image
 import mindspore as ms
 
-from src.dataset import create_eval_loader
+from src.dataset_old import create_eval_loader
 from src.utils import (
     calc_psnr_ssim,
     ensure_dir,
